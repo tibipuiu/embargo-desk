@@ -37,7 +37,6 @@ class Config:
     model: str
     request_delay: float
     headless: bool
-    run_times: list[str]
     data_dir: Path
     profile_dir: Path
     db_path: Path
@@ -54,7 +53,6 @@ def load_config() -> Config:
     urls = os.getenv("EUREKA_LISTING_URLS", "").strip()
     listing_urls = [u.strip() for u in urls.split(",") if u.strip()] or [EMBARGOED_NEWS_URL]
     data_dir = Path(os.getenv("DATA_DIR", "").strip() or ROOT / "data")
-    run_times = [t.strip() for t in os.getenv("RUN_TIMES", "07:00").split(",") if t.strip()]
     return Config(
         email=os.getenv("EUREKA_EMAIL", "").strip(),
         password=os.getenv("EUREKA_PASSWORD", "").strip(),
@@ -65,10 +63,8 @@ def load_config() -> Config:
         max_deep_reviews=_int("MAX_DEEP_REVIEWS", 25),
         model=os.getenv("CLAUDE_MODEL", "claude-opus-5-5").strip(),
         request_delay=float(os.getenv("REQUEST_DELAY_SECONDS", "1.5")),
-        # EurekAlert! answers headless browsers with 403. Locally a window opens;
-        # in Docker, Chromium draws to a virtual display (Xvfb) instead.
+        # EurekAlert! answers headless browsers with 403, so the fetcher opens a window.
         headless=_bool("HEADLESS", False),
-        run_times=run_times,
         data_dir=data_dir,
         profile_dir=data_dir / "browser-profile",
         db_path=data_dir / "eureka.db",

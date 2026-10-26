@@ -15,27 +15,29 @@ def wait_until(cond, timeout=10.0):
     return False
 
 
-def test_crashed_run_is_marked_failed(tmp_path):
+def test_crashed_scoring_is_marked_failed(tmp_path):
     store = Store(tmp_path / "eureka.db")
-    # Stand-in for `agent.py run` that registers a run and then dies without finishing it.
-    db = str(tmp_path / "eureka.db").replace("\\", "/")
-    script = (
-        "import sys; sys.path.insert(0, '.'); from eureka.store import Store; from pathlib import Path; "
-        f"Store(Path('{db}')).start_run('test'); sys.exit(3)"
-    )
-    runner = RunManager(load_config(), store, command=lambda trigger: [sys.executable, "-c", script])
+    run_id = store.start_run("fetch: Ana", "3 new releases")
+    runner = RunManager(load_config(), store, command=lambda rid: [sys.executable, "-c", "import sys; sys.exit(3)"])
 
-    assert runner.start("manual: test")
-    assert not runner.start("manual: again")  # one at a time
+    runner.score(run_id)
     assert wait_until(lambda: not runner.is_running())
-    run = store.runs(1)[0]
+    run = store.run(run_id)
     assert run["status"] == "error"
-    assert "exited with code 3" in run["summary"]
+    assert run["summary"] == "3 new releases · Scoring process exited with code 3"
 
 
-def test_blocks_while_another_process_runs(tmp_path):
+def test_queued_runs_score_one_after_another(tmp_path):
     store = Store(tmp_path / "eureka.db")
-    store.start_run("cli")  # a run started elsewhere, still going
-    runner = RunManager(load_config(), store, command=lambda trigger: [sys.executable, "-c", "pass"])
-    assert runner.is_running()
-    assert not runner.start("manual: test")
+    db = str(tmp_path / "eureka.db").replace("\\", "/")
+    # Stand-in for `agent.py score`: finishes its run after a short pause.
+    script = ("import sys, time; sys.path.insert(0, '.'); from pathlib import Path; from eureka.store import Store; "
+              f"time.sleep(0.5); Store(Path('{db}')).finish_run(int(sys.argv[1]), 'ok', 'scored')")
+    runner = RunManager(load_config(), store, command=lambda rid: [sys.executable, "-c", script, str(rid)])
+
+    first, second = store.start_run("fetch: Ana"), store.start_run("fetch: Bo")
+    runner.score(first)
+    runner.score(second)
+    assert store.run(second)["status"] == "running"  # waiting its turn
+    assert wait_until(lambda: not runner.is_running())
+    assert store.run(first)["status"] == "ok" and store.run(second)["status"] == "ok"

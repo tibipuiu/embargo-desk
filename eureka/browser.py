@@ -1,10 +1,8 @@
 """Logged-in EurekAlert! session backed by a persistent Chromium profile.
 
-You log in once with `python agent.py login` (a real browser window opens and
-you type your AAAS credentials yourself). The cookies are kept in
-.browser-profile/ so the daily run can reuse them. If the session
-expires and EUREKA_EMAIL / EUREKA_PASSWORD are set in .env, the agent tries to
-log back in automatically through the AAAS (Auth0) login form.
+Used by the fetcher on a colleague's computer (collect.py). The first time,
+they log in to EurekAlert! in the browser window themselves; the profile in
+data/browser-profile/ remembers the session after that.
 """
 
 import os
@@ -113,7 +111,9 @@ def open_session(cfg: Config, headless: bool | None = None) -> Iterator[EurekaSe
             str(cfg.profile_dir),
             headless=headless,
             viewport={"width": 1280, "height": 900},
-            env=dict(os.environ),  # carries DISPLAY for the virtual screen
+            # Hand over DISPLAY only when we started a virtual screen; passing a
+            # full environment copy makes the launch fail on Windows.
+            env={**os.environ, "DISPLAY": VIRTUAL_DISPLAY} if os.environ.get("DISPLAY") == VIRTUAL_DISPLAY else None,
             timeout=90_000,
             args=[
                 # Docker gives containers only 64 MB of /dev/shm, which makes

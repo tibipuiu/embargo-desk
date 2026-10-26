@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Fetch{% endblock %}
+{% block content %}
+<h1>Fetch new embargoes</h1>
+<p class="muted">New releases come in when someone on the team runs the fetcher on their computer. It opens EurekAlert! in a browser window, collects new embargoed releases and uploads them here; Embargo Desk then scores them and the picks appear on the board. Releases already fetched by anyone are skipped, so once a morning by one person is plenty.</p>
+
+<section class="panel steps">
+  <h2>1. Get your fetcher</h2>
+  <p>A zip with the fetcher and your personal upload key. Keep it to yourself.</p>
+  <form method="post" action="/fetch/download" class="row">
+    <button class="primary">Download the fetcher</button>
+    {% if has_key %}<span class="muted">Downloading again replaces your previous key; an older copy stops working.</span>{% endif %}
+  </form>
+</section>
+
+<section class="panel steps">
+  <h2>2. Set it up once</h2>
+  <ol>
+    <li>Unzip it somewhere permanent, such as Documents.</li>
+    <li><strong>Windows:</strong> double-click <code>1 - Set up (Windows)</code>.<br>
+        <strong>Mac:</strong> right-click <code>1 - Set up (Mac)</code> and choose <em>Open</em>.</li>
+    <li>If Python isn't installed, setup opens <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a>. Install it (on Windows, tick <em>Add python.exe to PATH</em>), then run setup again.</li>
+  </ol>
+  <p class="muted">Setup takes a few minutes and downloads the fetcher's own copy of Chromium (about 150 MB). Your normal browser isn't touched.</p>
+</section>
+
+<section class="panel steps">
+  <h2>3. Fetch</h2>
+  <ol>
+    <li>Double-click <code>2 - Fetch embargoes</code>.</li>
+    <li>The first time, log in to EurekAlert! in the window that opens, <strong>with your own reporter account</strong>. It's remembered after that.</li>
+    <li>Leave the window open until it says <em>Done</em>, usually 2–5 minutes. The progress then continues on the <a href="/runs">Runs</a> page while Claude scores the releases.</li>
+  </ol>
+</section>
+
+{% if has_key %}
+<form method="post" action="/fetch/revoke" onsubmit="return confirm('Revoke your key? Your current fetcher stops working until you download it again.')">
+  <button class="small danger">Revoke my key</button> <span class="muted">If you lose the zip or share it by mistake.</span>
+</form>
+{% endif %}
+{% endblock %}

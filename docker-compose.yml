@@ -1,7 +1,5 @@
-# Deployed with Coolify (Docker Compose build pack). Coolify's proxy handles the
-# domain and HTTPS: in the app's settings, set the domain of the "app" service to
-#   https://embargodesk.zmescience.com:8000
-# (the :8000 tells Coolify which container port to route to; visitors don't see it).
+# For Coolify's Docker Compose build pack (v4) or plain `docker compose up`.
+# On Coolify v3, use the Dockerfile build pack instead (see README).
 #
 # Variables below show up in Coolify's Environment Variables tab. ":?" marks required ones.
 services:
@@ -10,9 +8,8 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    shm_size: "1gb"   # optional: Chromium also runs with --disable-dev-shm-usage
     volumes:
-      - embargo-data:/data   # database, EurekAlert! browser session, digests
+      - embargo-data:/data   # database and digests
     environment:
       DATA_DIR: /data
       SECRET_KEY: ${SECRET_KEY:?}
@@ -20,17 +17,10 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECURE_COOKIES: ${SECURE_COOKIES:-true}
       TZ: ${TZ:-Europe/Bucharest}
-      RUN_TIMES: ${RUN_TIMES:-07:00}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-opus-5-5}
-      EUREKA_EMAIL: ${EUREKA_EMAIL:?}
-      EUREKA_PASSWORD: ${EUREKA_PASSWORD:?}
-      EUREKA_LISTING_URLS: ${EUREKA_LISTING_URLS:-https://www.eurekalert.org/reporter/embargoed-news}
       EMBARGOED_ONLY: ${EMBARGOED_ONLY:-true}
-      MAX_LISTING_PAGES: ${MAX_LISTING_PAGES:-5}
-      MAX_NEW_RELEASES: ${MAX_NEW_RELEASES:-150}
       MAX_DEEP_REVIEWS: ${MAX_DEEP_REVIEWS:-25}
-      REQUEST_DELAY_SECONDS: ${REQUEST_DELAY_SECONDS:-1.5}
 
 volumes:
   embargo-data:

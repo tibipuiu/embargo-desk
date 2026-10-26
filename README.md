@@ -1,122 +1,116 @@
 # Embargo Desk: EurekAlert! story scout for ZME Science
 
-A shared web app for the ZME Science newsroom. Every day an agent logs in to EurekAlert! with a
-reporter account, reads the new releases on
-[the embargoed-news page](https://www.eurekalert.org/reporter/embargoed-news), and has Claude pick
-the ones that would make good popular-science stories. The team sees the picks on one board,
-claims stories, tracks them from *claimed* to *published*, and leaves notes for each other.
+A shared web app for the ZME Science newsroom, at https://embargodesk.zmescience.com.
+
+Someone on the team runs the **fetcher** on their computer. It opens
+[EurekAlert!'s embargoed news](https://www.eurekalert.org/reporter/embargoed-news) in a browser
+window, logged in with their own reporter account, collects new embargoed releases, and uploads
+them. The server then has Claude pick the ones that would make good popular-science stories,
+and the team works from one board: claim a story, track it from *claimed* to *published*, and
+leave notes for each other.
+
+## How it fits together
+
+```
+ Colleague's computer                      Server (Coolify)
+ ───────────────────                       ────────────────
+ fetcher (collect.py)                      web app (web/app.py)
+   opens EurekAlert! in Chromium   ──►       /api/upload stores new releases
+   asks which releases are new     ◄──►      /api/known
+   uploads the new ones                      starts `agent.py score` in a separate process
+                                               Claude triage → full review of the best
+                                             board, release pages, notes, runs
+```
+
+**Why fetching happens on people's computers.** EurekAlert! refuses headless browsers, so the
+fetcher needs a real browser window, and Chromium needs more memory than the server has spare
+(~2 GB shared with Plausible, ClickHouse and Coolify). Running it on a desktop is also what
+EurekAlert! expects: each person uses their own reporter account in their own browser. The
+server only runs the website and the Claude calls, which are light.
 
 ## What the team sees
 
 - **Picks.** Cards sorted by fit score, each with a working headline, the reader hook, the
   source release, caveats (mouse study, small sample, hype...) and a countdown to the embargo
-  lift. One click, "I'll take it", claims a story. You can filter by verdict, status and date,
-  or sort by soonest embargo.
-- **Release page.** The full review: key finding, why it fits, study type, caveats. Also the
-  press release itself (full text, journal, DOI, media contact), a status and writer picker, and a
-  notes thread.
-- **Passed over.** Releases the agent dropped after reading only the title and opening, with its
-  reason. If it got one wrong, open it and click **Request full review**.
-- **Runs.** History and logs of every run, plus a **Run now** button.
-- **Settings** (admins only). Edit the editorial profile that steers the picks, and add or
-  remove colleagues and reset their passwords.
+  lift. One click, "I'll take it", claims a story.
+- **Release page.** The full review, the press release itself (full text, journal, DOI, media
+  contact), a status and writer picker, and a notes thread.
+- **Passed over.** Releases dropped at triage, with the reason. **Request full review** rescues
+  one.
+- **Fetch.** Download your personal fetcher and the setup steps.
+- **Runs.** Every upload and its scoring log. Admins can re-score releases left waiting after a
+  failure.
+- **Settings** (admins only). The editorial profile that steers the picks, and team accounts.
 
-## How the agent works
+## The fetcher (for colleagues)
 
-1. **Fetch.** Chromium, driven by Playwright, logs in with the reporter account, reads the
-   embargoed listing, and opens each new release. Releases are stored in SQLite, so none is
-   fetched or scored twice.
-2. **Triage.** Claude reads titles and opening paragraphs in batches of 40 and keeps roughly the
-   top quarter (low effort, cheap).
-3. **Review.** Claude reads the full text of up to 25 survivors and returns a structured review.
-4. **Board.** Results appear in the web app. A dated HTML/Markdown digest is also written to
-   `data/digests/`.
+1. In Embargo Desk, open **Fetch** and click **Download the fetcher**. The zip contains your
+   personal upload key, so don't share it. Downloading again replaces the old key.
+2. Unzip it somewhere permanent. Run **1 - Set up (Windows)** (on a Mac, right-click
+   **1 - Set up (Mac)** → Open). If Python isn't installed, setup opens python.org for you.
+3. To fetch, double-click **2 - Fetch embargoes**. The first time, log in to EurekAlert! in the
+   window that opens with your own reporter account; it's remembered after that.
 
-## Deploy with Coolify (embargodesk.zmescience.com)
+Releases already uploaded by anyone are skipped, so one person fetching each morning is enough.
+The only prerequisite is Python 3.10+; setup installs the rest, including the fetcher's own
+Chromium (about 150 MB), without touching the normal browser.
 
-Coolify builds the app from a Git repository and handles the domain and HTTPS through its own
-proxy. The repo's `docker-compose.yml` is written for Coolify's **Docker Compose** build pack.
+## Deploy with Coolify
 
-1. **DNS:** add an A record for `embargodesk.zmescience.com` pointing at the Coolify server
-   (skip this if you already have a wildcard `*.zmescience.com` record pointing there).
-2. **Git:** push this folder to a **private** GitHub repo. `.gitignore` keeps out `.env`,
-   `.venv`, `data/` and the browser session.
-3. **Coolify, new resource:** *Private Repository (with GitHub App)*, or *Deploy Key* for
-   another Git host. Pick the repo and branch, then set **Build Pack: Docker Compose** with the
-   compose file `/docker-compose.yml`.
-4. **Domain:** in the resource's configuration, set the domain of the `app` service to
-   `https://embargodesk.zmescience.com:8000`. The `:8000` tells Coolify which container port to
-   route to; people just visit `https://embargodesk.zmescience.com`.
-5. **Environment Variables** tab (they come from `docker-compose.yml`; required ones are flagged):
-   - `SECRET_KEY`: a long random string, e.g. from
-     `python -c "import secrets; print(secrets.token_urlsafe(48))"`
-   - `ADMIN_USERNAME`, `ADMIN_PASSWORD`: your first admin account
-   - `ANTHROPIC_API_KEY`
-   - `EUREKA_EMAIL`, `EUREKA_PASSWORD`: the reporter login the server uses
-   - optional: `TZ` (default `Europe/Bucharest`), `RUN_TIMES` (default `07:00`), `CLAUDE_MODEL`,
-     and the limits listed under *Settings* below
-6. **Deploy.** The first build takes a few minutes (the Playwright base image is large).
+### Coolify v3 (what zmescience uses)
+*Create New Resource → Application*, pick the GitHub source, repo `embargo-desk`, branch `main`,
+build pack **Docker**. Then, in the application's settings:
 
-Then open https://embargodesk.zmescience.com, log in as the admin, add your colleagues under
-**Settings**, and press **Run now** on the **Runs** page for a first run. Once you've logged in
-successfully, you can delete `ADMIN_PASSWORD` in Coolify; the account stays.
-
-**Data:** the database, EurekAlert! session and digests live in the `embargo-data` volume,
-mounted at `/data`. Coolify keeps it across redeploys and shows it under *Persistent Storage*.
-Add it to Coolify's backups.
-
-**Updates:** push to the branch and redeploy (or turn on auto-deploy on push).
-
-**Command-line tools:** open the container's **Terminal** in Coolify and run, for example,
-`python agent.py discover` or `python agent.py create-user jane --name "Jane Doe"`.
-
-**Coolify v3 (3.x):** v3 has no Docker Compose build pack, so use the Dockerfile instead.
-*Create New Resource → Application*, pick your GitHub Git Source, the `embargo-desk` repo and
-branch `main`, then build pack **Docker**. In the application's settings:
 - **Domain** `https://embargodesk.zmescience.com`, **Port** `8000`
 - **Base Directory** `/`, **Dockerfile Location** `/Dockerfile`
-- **Secrets:** add the variables from step 5, plus `TZ` and `RUN_TIMES` if you want to change
-  the defaults. Leave *Build Secret* off for all of them.
-- **Storage:** add a persistent volume at `/data`. Without it, the database and team notes are
-  lost on every redeploy.
+- **Secrets** (leave *Build Secret* off):
+  - `SECRET_KEY`: a long random string, e.g. from
+    `python -c "import secrets; print(secrets.token_urlsafe(48))"`
+  - `ADMIN_USERNAME`, `ADMIN_PASSWORD`: the first admin account
+  - `ANTHROPIC_API_KEY`
+  - optional: `TZ`, `CLAUDE_MODEL`, `MAX_DEEP_REVIEWS`, `EMBARGOED_ONLY`
+- **Storage:** a persistent volume at **`/data`**. Without it the database (accounts, claims,
+  notes) is wiped on every deploy.
 
-**Without Coolify:** on any Docker host, `docker compose up -d --build` runs the same container
-on port 8000. Put a reverse proxy with HTTPS in front of it, and pass the variables in an
-`.env` file next to the compose file.
+**DNS:** an A record for `embargodesk` pointing at the server, set to **DNS only** (grey
+cloud) in Cloudflare, so Coolify can issue the HTTPS certificate itself.
 
-## First run checklist
+### Coolify v4 or plain Docker
+Use the **Docker Compose** build pack with `/docker-compose.yml`, and set the `app` service's
+domain to `https://embargodesk.zmescience.com:8000`. Without Coolify, `docker compose up -d
+--build` runs it on port 8000 behind your own HTTPS proxy.
 
-The logged-in embargoed-news page can only be seen with a reporter account, so the parser for it
-is built to tolerate an unknown layout. After the first run, check the **Runs** log:
+**Updates:** push to `main` and redeploy. **Backups:** back up the `/data` volume.
 
-- `N releases, N new` with N > 0 means the listing parsed.
+**Add accounts from the command line** (Coolify terminal, or `docker exec` into the container):
+`python agent.py create-user jane --name "Jane Doe"`.
+
+## First fetch checklist
+
+The logged-in embargoed-news page can only be seen with a reporter account, so the parser is
+built to tolerate an unknown layout. After the first fetch, open its run on the **Runs** page:
+
+- `Listing page 1: N releases, N new` with N > 0 means the listing parsed.
 - `EMBARGOED` tags on the fetched releases mean embargo detection works. Releases found on the
   embargoed-news page count as embargoed even if no lift time is found.
-- If it says *no releases found*, the page was saved to `data/debug/empty_listing.html`. Send that
-  file to whoever maintains this (or to Claude) to adjust `eureka/parse.py`. The command
-  `docker compose exec app python agent.py discover` saves more snapshots.
+- If it says *No releases found*, the page was saved in the fetcher folder under
+  `data/debug/`. `2 - Fetch embargoes` with `--discover` (or `python collect.py --discover`)
+  saves more snapshots. Send them to whoever maintains this (or to Claude) to adjust
+  `eureka/parse.py`.
 
 ## Things to know
 
-- **Sharing embargoed material.** EurekAlert! reporter accounts belong to individual journalists,
-  and its terms forbid sharing account passwords. Everyone on this board sees embargoed releases
-  fetched with one account. Ideally each colleague has their own EurekAlert! reporter
-  registration, and you should check with EurekAlert! that a shared team tool like this is fine.
-  The app is login-only and marked `noindex`, but the material is still embargoed: treat it that
-  way.
-- **Automated access.** EurekAlert! returns 403 to headless browsers. In Docker, the agent runs a
-  normal Chromium on a virtual display (Xvfb), logged in as your account, loading one page every
-  1.5 s and at most ~150 releases per run. That is still automated access. If EurekAlert!
-  objects, the cleaner route is their embargoed email alerts: subscribe the reporter account and
-  have the agent read that inbox instead.
-- **EurekAlert! login on the server.** There is no screen to type into, so the server logs in by
-  itself with `EUREKA_EMAIL` / `EUREKA_PASSWORD`. If AAAS adds a CAPTCHA or two-factor step, that
-  automatic login will fail and the run log will say so; a remote-browser login helper would be
-  the next thing to add.
+- **Embargoed material.** Everyone on the board sees releases fetched with someone's reporter
+  account. Ideally each colleague who fetches has their own EurekAlert! registration, and it's
+  worth confirming with EurekAlert! that a shared team board is fine. The app is login-only and
+  marked `noindex`, but the material is still embargoed: treat it that way.
+- **Automated access.** The fetcher is a normal Chromium window driven by a script: one page
+  every 1.5 s, at most ~150 releases per fetch, with images, video and fonts skipped. If
+  EurekAlert! objects, the alternative is their embargoed email alerts (see Roadmap).
 - **Data sent to Claude.** Release text goes to the Anthropic API for scoring. Anthropic doesn't
   train on API data by default.
-- **Cost.** About $1–2 a day with Claude Opus 5.5 at ~150 releases. Lower `MAX_DEEP_REVIEWS` or
-  set `CLAUDE_MODEL=claude-sonnet-5-5` to roughly halve that.
+- **Cost.** About $1–2 per daily fetch with Claude Opus 5.5 at ~150 releases. Lower
+  `MAX_DEEP_REVIEWS` or set `CLAUDE_MODEL=claude-sonnet-5-5` to roughly halve that.
 
 ## Run locally (development)
 
@@ -124,56 +118,59 @@ is built to tolerate an unknown layout. After the first run, check the **Runs** 
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python -m playwright install chromium
-copy .env.example .env   # set SECRET_KEY, ADMIN_*, ANTHROPIC_API_KEY
-.venv\Scripts\python agent.py login          # log in to EurekAlert! yourself in the window that opens
+copy .env.example .env            # set SECRET_KEY, ADMIN_*, ANTHROPIC_API_KEY
 .venv\Scripts\python -m uvicorn web.app:app --reload
 ```
 
-Then open http://localhost:8000. Tests: `.venv\Scripts\python -m pytest`.
+Then open http://localhost:8000, download the fetcher from **Fetch** (it points at localhost),
+and run it. Tests: `.venv\Scripts\python -m pytest`.
 
-## Settings (`.env`)
+## Settings (server environment)
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `SECRET_KEY` | | Signs login cookies (required) |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | | First admin, created when no accounts exist |
 | `SECURE_COOKIES` | `true` | Set `false` only for local http |
-| `TZ` / `RUN_TIMES` | `Europe/Bucharest` / `07:00` | Server time zone and daily run times (comma-separated) |
-| `ANTHROPIC_API_KEY` | | Claude API key |
+| `TZ` | `Europe/Bucharest` | Time zone for dates on the site |
+| `ANTHROPIC_API_KEY` | | Claude API key (required) |
 | `CLAUDE_MODEL` | `claude-opus-5-5` | Model for triage and review |
-| `EUREKA_EMAIL` / `EUREKA_PASSWORD` | | Reporter login used by the server |
-| `EUREKA_LISTING_URLS` | reporter/embargoed-news | Listing page(s) to scan |
 | `EMBARGOED_ONLY` | `true` | Ignore releases not detected as embargoed |
-| `MAX_LISTING_PAGES` | 5 | Pages to follow per listing (stops early at known releases) |
-| `MAX_NEW_RELEASES` | 150 | Release pages opened per run |
 | `MAX_DEEP_REVIEWS` | 25 | Full Claude reviews per run |
-| `REQUEST_DELAY_SECONDS` | 1.5 | Pause between page loads |
+
+The fetcher's own limits (`MAX_LISTING_PAGES`, `MAX_NEW_RELEASES`, `REQUEST_DELAY_SECONDS`,
+`EUREKA_LISTING_URLS`) can be set in a `.env` file next to `collect.py`; the defaults suit daily
+use.
 
 ## Project layout
 
 ```
-web/app.py            FastAPI app: login, board, release pages, runs, settings
-web/templates/        Jinja2 pages        web/static/style.css
-eureka/pipeline.py    The daily job (fetch, triage, review, digest)
-eureka/scheduler.py   Runs the job at RUN_TIMES
-eureka/browser.py     Logged-in Playwright session
-eureka/parse.py       Listing and release HTML parsing
-eureka/scorer.py      Claude triage + review (structured outputs)
-eureka/store.py       SQLite: releases, users, notes, runs, settings
-eureka/digest.py      HTML + Markdown digest files
-agent.py              CLI: login, discover, run, create-user
-editorial_profile.md  Default editorial profile (editable in Settings)
-Dockerfile, docker-compose.yml   Container build + Coolify deployment
+web/app.py              Website + upload API + fetcher download
+web/templates/, static/ Pages and styles
+eureka/pipeline.py      Server: Claude triage + review of uploaded releases, digest
+eureka/runner.py        Server: runs scoring in a separate low-priority process, one at a time
+eureka/scorer.py        Claude prompts and structured outputs
+eureka/store.py         SQLite: releases, users, upload keys, notes, runs, settings
+eureka/digest.py        Dated HTML + Markdown digests in /data/digests
+agent.py                Server CLI: create-user, score
+collect.py              Fetcher entry point (runs on colleagues' computers)
+eureka/collect.py       Fetcher: read the listing, fetch release pages
+eureka/browser.py       Fetcher: logged-in Chromium session
+eureka/parse.py         EurekAlert! HTML parsing
+collector/              Fetcher setup/launch scripts and readme (packed into the download)
+editorial_profile.md    Default editorial profile (editable in Settings)
+Dockerfile, docker-compose.yml
 ```
 
 ## Roadmap
 
-- **v2: Questions for study authors.** For each pick, draft interview questions covering both
-  the findings (effect sizes, limits, what's new) and the story (how the idea started, surprises,
-  what it means for readers, what's next), written for a general audience. They would show on the
-  release page next to the notes.
+- **v2: Questions for study authors.** For each pick, draft interview questions covering the
+  findings (effect sizes, limits, what's new) and the story (how the idea started, surprises,
+  what it means for readers, what's next), written for a general audience.
 - **v3: Outside experts.** Find independent researchers in the field (OpenAlex / Semantic
   Scholar plus web search), check for conflicts such as co-authorship, and draft questions asking
   them to put the findings in context.
+- **Email alerts instead of a browser,** if EurekAlert!'s embargoed alert emails carry enough of
+  each release.
 - Smaller ideas: a morning email or Slack post with the top picks, thumbs up/down feedback that
   refines the editorial profile, and a check against stories ZME has already published.

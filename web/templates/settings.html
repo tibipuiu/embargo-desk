@@ -50,12 +50,10 @@
 <section class="panel">
   <h2>Agent</h2>
   <dl class="facts compact">
-    <dt>Listing pages</dt><dd>{{ cfg.listing_urls|join(', ') }}</dd>
-    <dt>Schedule</dt><dd>{{ cfg.run_times|join(', ') }} (server time)</dd>
     <dt>Model</dt><dd>{{ cfg.model }}</dd>
-    <dt>Limits</dt><dd>{{ cfg.max_new_releases }} releases fetched, {{ cfg.max_deep_reviews }} full reviews per run</dd>
-    <dt>EurekAlert! login</dt><dd>{{ 'Automatic (credentials set on the server)' if cfg.email and cfg.password else 'Manual: no credentials set on the server' }}</dd>
+    <dt>Limits</dt><dd>{{ cfg.max_deep_reviews }} full reviews per run</dd>
+    <dt>Fetching</dt><dd>From team members' computers (see <a href="/fetch">Fetch</a>)</dd>
   </dl>
-  <p class="muted">These come from the server's <code>.env</code> file. Change them there and restart the container.</p>
+  <p class="muted">These come from the server's environment variables (in Coolify). Change them there and redeploy.</p>
 </section>
 {% endblock %}

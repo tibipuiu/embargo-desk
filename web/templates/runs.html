@@ -4,9 +4,13 @@
 <div class="pagehead">
   <div>
     <h1>Runs</h1>
-    <p class="muted">Scheduled daily at {{ run_times|join(', ') }} (server time). Each run fetches new embargoed releases and reviews the promising ones.</p>
+    <p class="muted">A run starts when someone uploads new releases with the fetcher (<a href="/fetch">how to fetch</a>). Embargo Desk then triages them and reviews the promising ones.</p>
   </div>
-  <form method="post" action="/runs"><button class="primary" {{ 'disabled' if running }}>{{ 'Running…' if running else 'Run now' }}</button></form>
+  {% if user.is_admin and pending %}
+  <form method="post" action="/runs/score">
+    <button class="primary" {{ 'disabled' if running }}>Score {{ pending }} waiting</button>
+  </form>
+  {% endif %}
 </div>
 <table class="list">
   <thead><tr><th>#</th><th>Started</th><th>Trigger</th><th>Status</th><th>Result</th></tr></thead>
@@ -20,7 +24,7 @@
       <td>{{ r.summary or '' }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="muted">No runs yet.</td></tr>
+    <tr><td colspan="5" class="muted">No runs yet. <a href="/fetch">Fetch the first batch.</a></td></tr>
   {% endfor %}
   </tbody>
 </table>

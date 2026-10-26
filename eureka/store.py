@@ -10,7 +10,7 @@ import json
 import secrets
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name  TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     is_admin      INTEGER NOT NULL DEFAULT 0,
+    api_key_hash  TEXT,
     created_at    TEXT NOT NULL
 );
 
@@ -80,6 +81,11 @@ def hash_password(password: str) -> str:
     return f"scrypt${salt.hex()}${digest.hex()}"
 
 
+def _key_hash(key: str) -> str:
+    # Upload keys are long random strings, so a plain SHA-256 is enough.
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
 def verify_password(password: str, stored: str) -> bool:
     try:
         _, salt_hex, digest_hex = stored.split("$")
@@ -96,6 +102,10 @@ class Store:
         with self._conn() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            # Databases created before upload keys existed.
+            columns = {r["name"] for r in db.execute("PRAGMA table_info(users)")}
+            if "api_key_hash" not in columns:
+                db.execute("ALTER TABLE users ADD COLUMN api_key_hash TEXT")
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -109,6 +119,19 @@ class Store:
             db.close()
 
     # --- releases -----------------------------------------------------------
+
+    def known_ids(self, release_ids: list[str]) -> set[str]:
+        if not release_ids:
+            return set()
+        marks = ",".join("?" * len(release_ids))
+        with self._conn() as db:
+            rows = db.execute(f"SELECT release_id FROM releases WHERE release_id IN ({marks})", release_ids)
+            return {r["release_id"] for r in rows}
+
+    def untriaged_count(self, embargoed_only: bool) -> int:
+        sql = "SELECT COUNT(*) FROM releases WHERE triage IS NULL" + (" AND embargoed=1" if embargoed_only else "")
+        with self._conn() as db:
+            return db.execute(sql).fetchone()[0]
 
     def has(self, release_id: str) -> bool:
         with self._conn() as db:
@@ -233,6 +256,19 @@ class Store:
             db.execute("DELETE FROM notes WHERE user_id=?", (user_id,))
             db.execute("DELETE FROM users WHERE id=?", (user_id,))
 
+    def new_api_key(self, user_id: int) -> str:
+        """Create (or replace) the user's upload key. Only its hash is stored."""
+        key = "edk_" + secrets.token_urlsafe(32)
+        with self._conn() as db:
+            db.execute("UPDATE users SET api_key_hash=? WHERE id=?", (_key_hash(key), user_id))
+        return key
+
+    def user_by_api_key(self, key: str) -> sqlite3.Row | None:
+        if not key.startswith("edk_"):
+            return None
+        with self._conn() as db:
+            return db.execute("SELECT * FROM users WHERE api_key_hash=?", (_key_hash(key),)).fetchone()
+
     def authenticate(self, username: str, password: str) -> sqlite3.Row | None:
         user = self.user_by_name(username)
         return user if user and verify_password(password, user["password_hash"]) else None
@@ -251,10 +287,11 @@ class Store:
 
     # --- runs ---------------------------------------------------------------
 
-    def start_run(self, trigger: str) -> int:
+    def start_run(self, trigger: str, summary: str | None = None) -> int:
         with self._conn() as db:
             cur = db.execute(
-                "INSERT INTO runs (started_at, status, trigger) VALUES (?, 'running', ?)", (now_iso(), trigger)
+                "INSERT INTO runs (started_at, status, trigger, summary) VALUES (?, 'running', ?, ?)",
+                (now_iso(), trigger, summary),
             )
             return cur.lastrowid
 
@@ -274,19 +311,13 @@ class Store:
         with self._conn() as db:
             db.execute("UPDATE runs SET status='error', summary='Interrupted (server restarted)' WHERE status='running'")
 
-    def active_run(self) -> sqlite3.Row | None:
-        """A run still marked 'running' and started in the last 3 hours (older ones are stale)."""
-        with self._conn() as db:
-            return db.execute(
-                "SELECT * FROM runs WHERE status='running' AND started_at >= ? ORDER BY id DESC LIMIT 1",
-                ((datetime.now(timezone.utc) - timedelta(hours=3)).isoformat(timespec="seconds"),),
-            ).fetchone()
-
-    def fail_running_runs(self, summary: str) -> None:
+    def fail_run(self, run_id: int, reason: str) -> None:
+        """Mark a run failed, unless it already recorded its own result."""
         with self._conn() as db:
             db.execute(
-                "UPDATE runs SET status='error', summary=?, finished_at=? WHERE status='running'",
-                (summary, now_iso()),
+                "UPDATE runs SET status='error', summary=COALESCE(summary || ' · ', '') || ?, finished_at=?"
+                " WHERE id=? AND status='running'",
+                (reason, now_iso(), run_id),
             )
 
     def runs(self, limit: int = 30) -> list[sqlite3.Row]:
