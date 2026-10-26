@@ -7,8 +7,13 @@ expires and EUREKA_EMAIL / EUREKA_PASSWORD are set in .env, the agent tries to
 log back in automatically through the AAAS (Auth0) login form.
 """
 
+import os
+import shutil
+import subprocess
+import sys
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from playwright.sync_api import BrowserContext, TimeoutError as PlaywrightTimeout, sync_playwright
@@ -52,12 +57,45 @@ class EurekaSession:
         return self.is_logged_in()
 
 
+VIRTUAL_DISPLAY = ":99"
+
+
+@contextmanager
+def virtual_display(needed: bool) -> Iterator[None]:
+    """On a Linux server with no screen, run Xvfb so a non-headless Chromium has one to draw on.
+
+    Started only for the length of a browser session, so the web app never depends on it.
+    """
+    if not needed or os.environ.get("DISPLAY") or not sys.platform.startswith("linux") or not shutil.which("Xvfb"):
+        yield
+        return
+    # A lock file left by a previous crash would stop Xvfb from starting.
+    Path(f"/tmp/.X{VIRTUAL_DISPLAY[1:]}-lock").unlink(missing_ok=True)
+    proc = subprocess.Popen(
+        ["Xvfb", VIRTUAL_DISPLAY, "-screen", "0", "1280x900x24", "-nolisten", "tcp"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+    )
+    time.sleep(1.5)
+    if proc.poll() is not None:
+        raise RuntimeError(f"Xvfb failed to start: {proc.stderr.read().decode(errors='replace')[-500:]}")
+    os.environ["DISPLAY"] = VIRTUAL_DISPLAY
+    try:
+        yield
+    finally:
+        os.environ.pop("DISPLAY", None)
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 @contextmanager
 def open_session(cfg: Config, headless: bool | None = None) -> Iterator[EurekaSession]:
     if headless is None:
         headless = cfg.headless
     cfg.profile_dir.mkdir(parents=True, exist_ok=True)
-    with sync_playwright() as p:
+    with virtual_display(needed=not headless), sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
             str(cfg.profile_dir),
             headless=headless,
