@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/runs">← Runs</a></p>
+<h1>Run {{ run.id }} <span class="pill run-{{ run.status }}">{{ run.status }}</span></h1>
+<p class="muted">{{ run.trigger }} · started {{ run.started_at|ago }}{% if run.summary %} · {{ run.summary }}{% endif %}</p>
+<pre class="log">{{ run.log or 'No output yet.' }}</pre>
+{% if run.status == 'running' %}<script>setTimeout(() => location.reload(), 5000)</script>{% endif %}
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<section class="panel">
+  <h2>Editorial profile</h2>
+  <p class="muted">Claude reads this before judging each release. Describe what makes a good ZME Science story and what to skip.</p>
+  <form method="post" action="/settings/profile" class="stack">
+    <textarea name="profile" rows="18" class="mono">{{ profile }}</textarea>
+    <button class="primary">Save profile</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Team</h2>
+  <table class="list">
+    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Reset password</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ u.display_name }}</td>
+        <td>{{ u.username }}</td>
+        <td>{{ 'Admin' if u.is_admin else 'Writer' }}</td>
+        <td>
+          <form method="post" action="/settings/users/{{ u.id }}/password" class="inline">
+            <input name="password" type="password" placeholder="New password" minlength="10" required autocomplete="new-password">
+            <button class="small">Set</button>
+          </form>
+        </td>
+        <td>{% if u.id != user.id %}
+          <form method="post" action="/settings/users/{{ u.id }}/delete" class="inline" onsubmit="return confirm('Remove {{ u.display_name }}? Their notes are deleted too.')">
+            <button class="small danger">Remove</button>
+          </form>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <h3>Add a colleague</h3>
+  <form method="post" action="/settings/users" class="row">
+    <input name="display_name" placeholder="Full name" required>
+    <input name="username" placeholder="Username" required pattern="[A-Za-z0-9._-]+">
+    <input name="password" type="password" placeholder="Password (10+ chars)" minlength="10" required autocomplete="new-password">
+    <label class="check"><input type="checkbox" name="is_admin" value="1"> Admin</label>
+    <button class="primary">Add</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Agent</h2>
+  <dl class="facts compact">
+    <dt>Listing pages</dt><dd>{{ cfg.listing_urls|join(', ') }}</dd>
+    <dt>Schedule</dt><dd>{{ cfg.run_times|join(', ') }} (server time)</dd>
+    <dt>Model</dt><dd>{{ cfg.model }}</dd>
+    <dt>Limits</dt><dd>{{ cfg.max_new_releases }} releases fetched, {{ cfg.max_deep_reviews }} full reviews per run</dd>
+    <dt>EurekAlert! login</dt><dd>{{ 'Automatic (credentials set on the server)' if cfg.email and cfg.password else 'Manual: no credentials set on the server' }}</dd>
+  </dl>
+  <p class="muted">These come from the server's <code>.env</code> file. Change them there and restart the container.</p>
+</section>
+{% endblock %}

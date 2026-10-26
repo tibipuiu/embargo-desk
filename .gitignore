@@ -1,0 +1,8 @@
+.env
+.venv/
+data/
+debug/
+digests/
+.browser-profile/
+__pycache__/
+.pytest_cache/

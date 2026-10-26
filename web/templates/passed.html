@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Passed over{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Passed over at triage</h1>
+    <p class="muted">The agent read only the title and opening of these. If one looks promising, open it and request a full review.</p>
+  </div>
+  <form method="get" class="filters">
+    <select name="days" onchange="this.form.submit()">
+      {% for d, label in [(1, 'Last 24 h'), (3, 'Last 3 days'), (7, 'Last week'), (30, 'Last month')] %}
+      <option value="{{ d }}" {{ 'selected' if days == d }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+<table class="list">
+  <thead><tr><th>Release</th><th>Why it was passed over</th><th>Embargo</th></tr></thead>
+  <tbody>
+  {% for it in items %}{% set emb = it.embargo_until|embargo %}
+    <tr>
+      <td><a href="/release/{{ it.release.release_id }}">{{ it.release.title }}</a><br><span class="muted">{{ it.release.institution }}{% if it.release.journal %} · <em>{{ it.release.journal }}</em>{% endif %}</span></td>
+      <td>{{ it.triage.reason }}</td>
+      <td class="nowrap">{% if emb %}{{ emb.rel }}{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">Nothing passed over in this period.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

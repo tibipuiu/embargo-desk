@@ -1,0 +1,11 @@
+.venv
+.env
+data
+debug
+digests
+.browser-profile
+tests
+__pycache__
+.pytest_cache
+*.md
+!editorial_profile.md

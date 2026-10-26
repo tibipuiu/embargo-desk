@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Runs{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Runs</h1>
+    <p class="muted">Scheduled daily at {{ run_times|join(', ') }} (server time). Each run fetches new embargoed releases and reviews the promising ones.</p>
+  </div>
+  <form method="post" action="/runs"><button class="primary" {{ 'disabled' if running }}>{{ 'Running…' if running else 'Run now' }}</button></form>
+</div>
+<table class="list">
+  <thead><tr><th>#</th><th>Started</th><th>Trigger</th><th>Status</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for r in runs %}
+    <tr>
+      <td><a href="/runs/{{ r.id }}">{{ r.id }}</a></td>
+      <td class="nowrap">{{ r.started_at|ago }}</td>
+      <td>{{ r.trigger }}</td>
+      <td><span class="pill run-{{ r.status }}">{{ r.status }}</span></td>
+      <td>{{ r.summary or '' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No runs yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

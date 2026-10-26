@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% set rel = item.release %}{% set rev = item.review %}{% set emb = item.embargo_until|embargo %}
+{% block title %}{{ rev.headline_idea if rev else rel.title }}{% endblock %}
+{% block content %}
+<p class="crumb"><a href="/">← Picks</a></p>
+<div class="detail">
+  <section class="main-col">
+    {% if rev %}
+    <p class="kicker"><span>{{ rev.topic }}</span><span class="verdict">{{ rev.verdict }}</span><span>{{ rev.fit_score }}/10</span><span>visuals: {{ rev.visual_potential }}</span></p>
+    <h1>{{ rev.headline_idea }}</h1>
+    <p class="hook big">{{ rev.hook }}</p>
+    <dl class="facts">
+      <dt>Key finding</dt><dd>{{ rev.key_finding }}</dd>
+      <dt>Why it fits</dt><dd>{{ rev.why_it_fits }}</dd>
+      <dt>Study type</dt><dd>{{ rev.study_type }}</dd>
+      {% if rev.caveats %}<dt>Caveats</dt><dd><ul>{% for c in rev.caveats %}<li>{{ c }}</li>{% endfor %}</ul></dd>{% endif %}
+    </dl>
+    {% else %}
+    <h1>{{ rel.title }}</h1>
+    <div class="flash">
+      Passed over at triage{% if item.triage %}: {{ item.triage.reason }}{% endif %}
+      <form method="post" action="/release/{{ rel.release_id }}/review" class="inline"><button class="small">Request full review</button></form>
+    </div>
+    {% endif %}
+
+    <h3>The press release</h3>
+    <p class="src"><strong>{{ rel.title }}</strong>{% if rel.subtitle %}<br>{{ rel.subtitle }}{% endif %}</p>
+    <dl class="facts compact">
+      <dt>From</dt><dd>{{ rel.institution or '—' }}</dd>
+      <dt>Type</dt><dd>{{ rel.release_type or '—' }}</dd>
+      <dt>Journal</dt><dd>{% if rel.journal %}<em>{{ rel.journal }}</em>{% else %}—{% endif %}</dd>
+      <dt>DOI</dt><dd>{% if rel.doi %}<a href="https://doi.org/{{ rel.doi }}" target="_blank" rel="noopener">{{ rel.doi }}</a>{% else %}—{% endif %}</dd>
+      <dt>Funder</dt><dd>{{ rel.funder or '—' }}</dd>
+      <dt>Embargo</dt><dd>{{ rel.embargo_text or '—' }}{% if emb %} <span class="muted">({{ emb.rel }})</span>{% endif %}</dd>
+      <dt>Media contact</dt><dd>{{ rel.contacts or '—' }}</dd>
+      <dt>On EurekAlert!</dt><dd><a href="{{ rel.url }}" target="_blank" rel="noopener">Open release</a> <span class="muted">(needs a reporter login)</span></dd>
+    </dl>
+    <details class="fulltext">
+      <summary>Full text</summary>
+      <div class="prose">{% for para in rel.body.split('\n') %}{% if para.strip() %}<p>{{ para }}</p>{% endif %}{% endfor %}</div>
+    </details>
+  </section>
+
+  <aside class="side-col">
+    <div class="panel">
+      <h3>Status</h3>
+      <p><span class="pill st-{{ item.status }}">{{ item.status }}</span>{% if item.assignee_name %} · {{ item.assignee_name }}{% endif %}</p>
+      <form method="post" action="/release/{{ rel.release_id }}/status" class="stack">
+        <label>Status
+          <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if item.status == s }}>{{ s|capitalize }}</option>{% endfor %}</select>
+        </label>
+        <label>Writer
+          <select name="assignee">
+            <option value="">Nobody</option>
+            {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if item.assignee_id == u.id }}>{{ u.display_name }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="primary">Update</button>
+      </form>
+    </div>
+    <div class="panel" id="notes">
+      <h3>Notes</h3>
+      {% for n in notes %}
+        <div class="note"><b>{{ n.display_name }}</b> <span class="muted">{{ n.created_at|ago }}</span><p>{{ n.body }}</p></div>
+      {% else %}
+        <p class="muted">No notes yet. Angles, contacts, who's doing what.</p>
+      {% endfor %}
+      <form method="post" action="/release/{{ rel.release_id }}/notes" class="stack">
+        <textarea name="body" rows="3" placeholder="Add a note for the team" required></textarea>
+        <button>Add note</button>
+      </form>
+    </div>
+  </aside>
+</div>
+{% endblock %}

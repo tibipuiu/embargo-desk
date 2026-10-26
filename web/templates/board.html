@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Picks{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Story picks</h1>
+    <p class="muted">
+      {{ items|length }} shown · {{ passed_count }} <a href="/passed?days={{ days }}">passed over</a>
+      {% if last_run %}· last run {{ last_run.started_at|ago }}{% if last_run.status == 'error' %} <a class="bad" href="/runs/{{ last_run.id }}">(failed)</a>{% endif %}{% endif %}
+    </p>
+  </div>
+  <form method="get" class="filters">
+    <select name="verdict" onchange="this.form.submit()">
+      <option value="picks" {{ 'selected' if verdict == 'picks' }}>Strong + maybe</option>
+      <option value="strong pick" {{ 'selected' if verdict == 'strong pick' }}>Strong picks</option>
+      <option value="maybe" {{ 'selected' if verdict == 'maybe' }}>Maybe</option>
+      <option value="all" {{ 'selected' if verdict == 'all' }}>Everything reviewed</option>
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Any status</option>
+      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ s|capitalize }}</option>{% endfor %}
+    </select>
+    <select name="days" onchange="this.form.submit()">
+      {% for d, label in [(1, 'Last 24 h'), (3, 'Last 3 days'), (7, 'Last week'), (30, 'Last month')] %}
+      <option value="{{ d }}" {{ 'selected' if days == d }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <select name="sort" onchange="this.form.submit()">
+      <option value="score" {{ 'selected' if sort == 'score' }}>Best first</option>
+      <option value="embargo" {{ 'selected' if sort == 'embargo' }}>Embargo lifts soonest</option>
+    </select>
+    <noscript><button>Apply</button></noscript>
+  </form>
+</div>
+
+{% if not items %}
+<div class="empty">
+  <p>No picks here yet.</p>
+  <p class="muted">The agent runs daily at the times set on the <a href="/runs">Runs</a> page, or you can start a run there.</p>
+</div>
+{% endif %}
+
+<div class="cards">
+{% for it in items %}
+  {% set rel = it.release %}{% set rev = it.review %}{% set emb = it.embargo_until|embargo %}
+  <article class="card v-{{ rev.verdict|replace(' ', '-') }} s-{{ it.status }}">
+    <div class="score"><b>{{ rev.fit_score }}</b><small>/10</small></div>
+    <div class="body">
+      <p class="kicker">
+        <span>{{ rev.topic }}</span>
+        <span class="verdict">{{ rev.verdict }}</span>
+        {% if emb %}<span class="emb {{ 'soon' if emb.soon }} {{ 'lifted' if emb.lifted }}" title="{{ emb.when }}">Embargo {{ emb.rel }}</span>{% endif %}
+      </p>
+      <h2><a href="/release/{{ rel.release_id }}">{{ rev.headline_idea }}</a></h2>
+      <p class="hook">{{ rev.hook }}</p>
+      <p class="src">{{ rel.title }} · <span class="muted">{{ rel.institution }}{% if rel.journal %} · <em>{{ rel.journal }}</em>{% endif %}</span></p>
+      {% if rev.caveats %}<p class="caveats">⚠ {{ rev.caveats|join(' · ') }}</p>{% endif %}
+    </div>
+    <div class="side">
+      <span class="pill st-{{ it.status }}">{{ it.status }}{% if it.assignee_name %} · {{ it.assignee_name }}{% endif %}</span>
+      {% if it.note_count %}<a class="notes-count" href="/release/{{ rel.release_id }}#notes">{{ it.note_count }} note{{ 's' if it.note_count > 1 }}</a>{% endif %}
+      {% if it.status == 'new' %}
+      <form method="post" action="/release/{{ rel.release_id }}/status">
+        <input type="hidden" name="status" value="claimed"><input type="hidden" name="assignee" value="me">
+        <input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
+        <button class="small">I'll take it</button>
+      </form>
+      {% endif %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+{% endblock %}

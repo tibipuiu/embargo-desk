@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block mainclass %}narrow{% endblock %}
+{% block content %}
+<div class="login">
+  <h1>Embargo Desk</h1>
+  <p class="muted">ZME Science newsroom picks from EurekAlert! embargoed releases.</p>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="stack">
+    <label>Username <input name="username" autocomplete="username" required autofocus></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary">Log in</button>
+  </form>
+</div>
+{% endblock %}
