@@ -121,6 +121,10 @@ def open_session(cfg: Config, headless: bool | None = None) -> Iterator[EurekaSe
                 "--disable-dev-shm-usage",
                 # There's no graphics card on the server; don't look for one.
                 "--disable-gpu",
+                # Keep memory down on a small server: one renderer process, and
+                # no per-site process isolation (the agent visits one site).
+                "--renderer-process-limit=1",
+                "--disable-features=site-per-process",
                 "--no-first-run",
                 "--no-default-browser-check",
             ],
