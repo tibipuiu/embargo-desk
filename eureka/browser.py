@@ -62,6 +62,9 @@ def open_session(cfg: Config, headless: bool | None = None) -> Iterator[EurekaSe
             str(cfg.profile_dir),
             headless=headless,
             viewport={"width": 1280, "height": 900},
+            # Docker gives containers only 64 MB of /dev/shm, which makes Chromium
+            # crash; this flag has it use /tmp instead.
+            args=["--disable-dev-shm-usage"],
         )
         try:
             yield EurekaSession(ctx, cfg)

@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    shm_size: "1gb"   # Chromium needs more shared memory than Docker's 64 MB default
+    shm_size: "1gb"   # optional: Chromium also runs with --disable-dev-shm-usage
     volumes:
       - embargo-data:/data   # database, EurekAlert! browser session, digests
     environment:

@@ -70,6 +70,16 @@ Add it to Coolify's backups.
 **Command-line tools:** open the container's **Terminal** in Coolify and run, for example,
 `python agent.py discover` or `python agent.py create-user jane --name "Jane Doe"`.
 
+**Coolify v3 (3.x):** v3 has no Docker Compose build pack, so use the Dockerfile instead.
+*Create New Resource → Application*, pick your GitHub Git Source, the `embargo-desk` repo and
+branch `main`, then build pack **Docker**. In the application's settings:
+- **Domain** `https://embargodesk.zmescience.com`, **Port** `8000`
+- **Base Directory** `/`, **Dockerfile Location** `/Dockerfile`
+- **Secrets:** add the variables from step 5, plus `TZ` and `RUN_TIMES` if you want to change
+  the defaults. Leave *Build Secret* off for all of them.
+- **Storage:** add a persistent volume at `/data`. Without it, the database and team notes are
+  lost on every redeploy.
+
 **Without Coolify:** on any Docker host, `docker compose up -d --build` runs the same container
 on port 8000. Put a reverse proxy with HTTPS in front of it, and pass the variables in an
 `.env` file next to the compose file.
