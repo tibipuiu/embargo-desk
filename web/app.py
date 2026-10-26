@@ -20,7 +20,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from eureka.config import load_config
-from eureka.pipeline import Pipeline, editorial_profile, is_running, run_tracked
+from eureka.pipeline import Pipeline, editorial_profile
+from eureka.runner import RunManager
 from eureka.scheduler import start_scheduler
 from eureka.store import STATUSES, Store
 
@@ -32,6 +33,7 @@ if not cfg.secret_key:
     raise SystemExit("Set SECRET_KEY in .env (any long random string) before starting the web app.")
 store = Store(cfg.db_path)
 store.fail_stale_runs()
+runner = RunManager(cfg, store)
 
 # First start: create the admin account from ADMIN_USERNAME / ADMIN_PASSWORD.
 if cfg.admin_username and cfg.admin_password and not store.users():
@@ -39,7 +41,7 @@ if cfg.admin_username and cfg.admin_password and not store.users():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    start_scheduler(cfg, store)
+    start_scheduler(cfg, runner)
     yield
 
 
@@ -85,7 +87,7 @@ def require_admin(request: Request):
 
 def render(request: Request, name: str, **ctx) -> HTMLResponse:
     ctx.setdefault("user", None)
-    ctx["running"] = is_running()
+    ctx["running"] = runner.is_running()
     ctx["flash"] = request.session.pop("flash", None)
     return templates.TemplateResponse(request, name, ctx)
 
@@ -276,10 +278,9 @@ def run_detail(request: Request, run_id: int):
 @app.post("/runs")
 def run_now(request: Request):
     user = current_user(request)
-    if is_running():
+    if not runner.start(f"manual: {user['display_name']}"):
         return back("/runs", "A run is already in progress.", request)
-    threading.Thread(target=run_tracked, args=(cfg, store, f"manual: {user['display_name']}"), daemon=True).start()
-    time.sleep(0.5)
+    time.sleep(1)  # give the new run a moment to appear in the list
     return back("/runs", "Run started.", request)
 
 

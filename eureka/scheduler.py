@@ -5,11 +5,10 @@ import time
 from datetime import datetime
 
 from .config import Config
-from .pipeline import run_tracked
-from .store import Store
+from .runner import RunManager
 
 
-def start_scheduler(cfg: Config, store: Store) -> threading.Thread:
+def start_scheduler(cfg: Config, runner: RunManager) -> threading.Thread:
     def loop() -> None:
         fired: set[str] = set()
         while True:
@@ -20,7 +19,8 @@ def start_scheduler(cfg: Config, store: Store) -> threading.Thread:
                     fired.add(key)
                     # Don't fire for times that already passed before the server started.
                     if (now - now.replace(hour=int(hhmm[:2]), minute=int(hhmm[3:]), second=0)).total_seconds() < 600:
-                        run_tracked(cfg, store, "schedule")
+                        runner.start("schedule")
+            runner.check()
             time.sleep(30)
 
     thread = threading.Thread(target=loop, name="scheduler", daemon=True)

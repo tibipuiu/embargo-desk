@@ -10,7 +10,7 @@ import json
 import secrets
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator
 
@@ -273,6 +273,21 @@ class Store:
         """Runs left 'running' by a previous process (e.g. a container restart)."""
         with self._conn() as db:
             db.execute("UPDATE runs SET status='error', summary='Interrupted (server restarted)' WHERE status='running'")
+
+    def active_run(self) -> sqlite3.Row | None:
+        """A run still marked 'running' and started in the last 3 hours (older ones are stale)."""
+        with self._conn() as db:
+            return db.execute(
+                "SELECT * FROM runs WHERE status='running' AND started_at >= ? ORDER BY id DESC LIMIT 1",
+                ((datetime.now(timezone.utc) - timedelta(hours=3)).isoformat(timespec="seconds"),),
+            ).fetchone()
+
+    def fail_running_runs(self, summary: str) -> None:
+        with self._conn() as db:
+            db.execute(
+                "UPDATE runs SET status='error', summary=?, finished_at=? WHERE status='running'",
+                (summary, now_iso()),
+            )
 
     def runs(self, limit: int = 30) -> list[sqlite3.Row]:
         with self._conn() as db:

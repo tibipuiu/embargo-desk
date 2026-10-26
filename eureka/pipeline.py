@@ -143,6 +143,8 @@ def run_tracked(cfg: Config, store: Store, trigger: str, **kwargs) -> int | None
     if not RUN_LOCK.acquire(blocking=False):
         return None
     try:
+        if store.active_run() is not None:  # e.g. started by another process
+            return None
         run_id = store.start_run(trigger)
 
         def log(line: str) -> None:
@@ -158,7 +160,3 @@ def run_tracked(cfg: Config, store: Store, trigger: str, **kwargs) -> int | None
         return run_id
     finally:
         RUN_LOCK.release()
-
-
-def is_running() -> bool:
-    return RUN_LOCK.locked()

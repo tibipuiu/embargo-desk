@@ -58,9 +58,12 @@ def cmd_discover(cfg: Config) -> int:
     return 0
 
 
-def cmd_run(cfg: Config, dry_run: bool, include_all: bool) -> int:
+def cmd_run(cfg: Config, dry_run: bool, include_all: bool, trigger: str) -> int:
     store = Store(cfg.db_path)
-    run_id = run_tracked(cfg, store, "cli", dry_run=dry_run, include_all=include_all)
+    run_id = run_tracked(cfg, store, trigger, dry_run=dry_run, include_all=include_all)
+    if run_id is None:
+        print("A run is already in progress.")
+        return 0
     run = store.run(run_id)
     print(f"\n{run['status'].upper()}: {run['summary']}")
     return 0 if run["status"] == "ok" else 1
@@ -88,6 +91,7 @@ def main() -> int:
     run = sub.add_parser("run")
     run.add_argument("--dry-run", action="store_true", help="fetch and parse only; no Claude calls")
     run.add_argument("--all", action="store_true", help="include releases not marked as embargoed")
+    run.add_argument("--trigger", default="cli", help=argparse.SUPPRESS)  # set by the web app
     user = sub.add_parser("create-user")
     user.add_argument("username")
     user.add_argument("--name", default="", help="display name, e.g. 'Jane Doe'")
@@ -101,7 +105,7 @@ def main() -> int:
         return cmd_discover(cfg)
     if args.command == "create-user":
         return cmd_create_user(cfg, args.username, args.name, args.admin)
-    return cmd_run(cfg, args.dry_run, args.all)
+    return cmd_run(cfg, args.dry_run, args.all, args.trigger)
 
 
 if __name__ == "__main__":

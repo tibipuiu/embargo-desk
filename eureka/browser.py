@@ -22,10 +22,17 @@ from .config import BASE_URL, Config
 from .parse import looks_logged_in
 
 
+SKIPPED_RESOURCES = {"image", "media", "font"}
+
+
 class EurekaSession:
     def __init__(self, ctx: BrowserContext, cfg: Config):
         self.ctx = ctx
         self.cfg = cfg
+        # The agent only reads text, so don't download images, video or fonts:
+        # it keeps Chromium's memory use and page load times down.
+        ctx.route("**/*", lambda route: route.abort() if route.request.resource_type in SKIPPED_RESOURCES
+                  else route.continue_())
         self.page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
     def get(self, url: str) -> str:
@@ -95,14 +102,28 @@ def open_session(cfg: Config, headless: bool | None = None) -> Iterator[EurekaSe
     if headless is None:
         headless = cfg.headless
     cfg.profile_dir.mkdir(parents=True, exist_ok=True)
+    # If Chromium was killed mid-run (e.g. a container restart), its profile
+    # lock survives and the next launch waits on a browser that no longer exists.
+    for lock in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        path = cfg.profile_dir / lock
+        if path.is_symlink() or path.exists():
+            path.unlink()
     with virtual_display(needed=not headless), sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
             str(cfg.profile_dir),
             headless=headless,
             viewport={"width": 1280, "height": 900},
-            # Docker gives containers only 64 MB of /dev/shm, which makes Chromium
-            # crash; this flag has it use /tmp instead.
-            args=["--disable-dev-shm-usage"],
+            env=dict(os.environ),  # carries DISPLAY for the virtual screen
+            timeout=90_000,
+            args=[
+                # Docker gives containers only 64 MB of /dev/shm, which makes
+                # Chromium crash; this flag has it use /tmp instead.
+                "--disable-dev-shm-usage",
+                # There's no graphics card on the server; don't look for one.
+                "--disable-gpu",
+                "--no-first-run",
+                "--no-default-browser-check",
+            ],
         )
         try:
             yield EurekaSession(ctx, cfg)
